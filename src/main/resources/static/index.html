@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Sistema de Pedidos</title>
+  <style>
+    body { font-family: Arial; margin: 30px; background: #f4f4f4; }
+    section { background: #fff; padding: 20px; margin-bottom: 20px; border-radius: 8px; max-width: 700px; }
+    label { display: block; margin-top: 8px; }
+    input, select, button { padding: 6px; margin-top: 4px; }
+    button { cursor: pointer; }
+    table { border-collapse: collapse; margin-top: 15px; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+    .msg { font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<section>
+  <h2>Cadastro de Cliente</h2>
+  <label>Nome: <input type="text" id="clienteNome"></label>
+  <label>CPF: <input type="text" id="clienteCpf"></label>
+  <button onclick="cadastrarCliente()">Cadastrar</button>
+  <p id="msgCliente" class="msg"></p>
+  <table>
+    <thead><tr><th>ID</th><th>Nome</th><th>CPF</th><th></th></tr></thead>
+    <tbody id="tabelaClientes"></tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Cadastro de Produto</h2>
+  <label>Nome do Produto: <input type="text" id="produtoNome"></label>
+  <label>Preço: <input type="number" step="0.01" id="produtoPreco"></label>
+  <button onclick="cadastrarProduto()">Cadastrar</button>
+  <p id="msgProduto" class="msg"></p>
+  <table>
+    <thead><tr><th>ID</th><th>Produto</th><th>Preço</th><th></th></tr></thead>
+    <tbody id="tabelaProdutos"></tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Cadastro de Pedido</h2>
+  <label>Cliente: <select id="pedidoCliente"></select></label>
+  <label>Produto: <select id="pedidoProduto" onchange="calcularTotal()"></select></label>
+  <label>Quantidade: <input type="number" min="1" id="pedidoQuantidade" value="1" oninput="calcularTotal()"></label>
+  <p><strong>Total do Pedido: R$ <span id="totalPedido">0,00</span></strong></p>
+  <button onclick="cadastrarPedido()">Cadastrar Pedido</button>
+  <p id="msgPedido" class="msg"></p>
+  <table>
+    <thead><tr><th>ID</th><th>Cliente</th><th>Produto</th><th>Qtd</th><th>Total</th><th></th></tr></thead>
+    <tbody id="tabelaPedidos"></tbody>
+  </table>
+</section>
+
+<script>
+  let produtos = [];
+  const moeda = v => Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+
+  function mostrar(id, texto, ok) {
+    const el = document.getElementById(id);
+    el.style.color = ok ? "green" : "red";
+    el.textContent = texto;
+  }
+
+  async function enviar(url, metodo, dados, msgId, sucesso) {
+    const resp = await fetch(url, {
+      method: metodo,
+      headers: { "Content-Type": "application/json" },
+      body: dados ? JSON.stringify(dados) : undefined
+    });
+    if (!resp.ok) {
+      const erro = await resp.json().catch(() => ({ erro: "Erro inesperado." }));
+      mostrar(msgId, erro.erro, false);
+      return false;
+    }
+    mostrar(msgId, sucesso, true);
+    return true;
+  }
+
+  // ---------- CLIENTES ----------
+  async function carregarClientes() {
+    const clientes = await (await fetch("/api/clientes")).json();
+    document.getElementById("tabelaClientes").innerHTML = clientes.map(c =>
+      `<tr><td>${c.id}</td><td>${c.nome}</td><td>${c.cpf}</td>
+       <td><button onclick="excluirCliente(${c.id})">Excluir</button></td></tr>`).join("");
+    document.getElementById("pedidoCliente").innerHTML =
+      `<option value="">Selecione</option>` +
+      clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join("");
+  }
+
+  async function cadastrarCliente() {
+    const ok = await enviar("/api/clientes", "POST", {
+      nome: document.getElementById("clienteNome").value,
+      cpf: document.getElementById("clienteCpf").value
+    }, "msgCliente", "Cliente cadastrado!");
+    if (ok) {
+      document.getElementById("clienteNome").value = "";
+      document.getElementById("clienteCpf").value = "";
+      carregarClientes();
+    }
+  }
+
+  async function excluirCliente(id) {
+    if (!confirm("Excluir este cliente?")) return;
+    if (await enviar(`/api/clientes/${id}`, "DELETE", null, "msgCliente", "Cliente excluído!")) carregarClientes();
+  }
+
+  // ---------- PRODUTOS ----------
+  async function carregarProdutos() {
+    produtos = await (await fetch("/api/produtos")).json();
+    document.getElementById("tabelaProdutos").innerHTML = produtos.map(p =>
+      `<tr><td>${p.id}</td><td>${p.nome}</td><td>R$ ${moeda(p.preco)}</td>
+       <td><button onclick="excluirProduto(${p.id})">Excluir</button></td></tr>`).join("");
+    document.getElementById("pedidoProduto").innerHTML =
+      `<option value="">Selecione</option>` +
+      produtos.map(p => `<option value="${p.id}">${p.nome} - R$ ${moeda(p.preco)}</option>`).join("");
+    calcularTotal();
+  }
+
+  async function cadastrarProduto() {
+    const ok = await enviar("/api/produtos", "POST", {
+      nome: document.getElementById("produtoNome").value,
+      preco: parseFloat(document.getElementById("produtoPreco").value)
+    }, "msgProduto", "Produto cadastrado!");
+    if (ok) {
+      document.getElementById("produtoNome").value = "";
+      document.getElementById("produtoPreco").value = "";
+      carregarProdutos();
+    }
+  }
+
+  async function excluirProduto(id) {
+    if (!confirm("Excluir este produto?")) return;
+    if (await enviar(`/api/produtos/${id}`, "DELETE", null, "msgProduto", "Produto excluído!")) carregarProdutos();
+  }
+
+  // ---------- PEDIDOS ----------
+  function calcularTotal() {
+    const id = Number(document.getElementById("pedidoProduto").value);
+    const qtd = Number(document.getElementById("pedidoQuantidade").value) || 0;
+    const p = produtos.find(x => x.id === id);
+    document.getElementById("totalPedido").textContent = moeda(p ? p.preco * qtd : 0);
+  }
+
+  async function carregarPedidos() {
+    const pedidos = await (await fetch("/api/pedidos")).json();
+    document.getElementById("tabelaPedidos").innerHTML = pedidos.map(p =>
+      `<tr><td>${p.id}</td><td>${p.cliente.nome}</td><td>${p.produto.nome}</td>
+       <td>${p.quantidade}</td><td>R$ ${moeda(p.total)}</td>
+       <td><button onclick="excluirPedido(${p.id})">Excluir</button></td></tr>`).join("");
+  }
+
+  async function cadastrarPedido() {
+    const clienteId = document.getElementById("pedidoCliente").value;
+    const produtoId = document.getElementById("pedidoProduto").value;
+    const ok = await enviar("/api/pedidos", "POST", {
+      clienteId: clienteId ? Number(clienteId) : null,
+      produtoId: produtoId ? Number(produtoId) : null,
+      quantidade: Number(document.getElementById("pedidoQuantidade").value)
+    }, "msgPedido", "Pedido cadastrado!");
+    if (ok) carregarPedidos();
+  }
+
+  async function excluirPedido(id) {
+    if (!confirm("Excluir este pedido?")) return;
+    if (await enviar(`/api/pedidos/${id}`, "DELETE", null, "msgPedido", "Pedido excluído!")) carregarPedidos();
+  }
+
+  carregarClientes();
+  carregarProdutos();
+  carregarPedidos();
+</script>
+</body>
+</html>
