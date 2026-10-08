@@ -1,0 +1,10 @@
+# PI Etapa 9 - Sistema de Pedidos
+
+Aplicação Spring Boot com Cliente, Produto e Pedido, usando MySQL e JPA.
+
+## Como executar
+1. Crie o banco: `CREATE DATABASE pi_etapa9;`
+2. Configure usuário e senha em `src/main/resources/application.properties`
+3. Rode o projeto no NetBeans (Run Project)
+4. Acesse [localhost](http://localhost:12345/)
+
